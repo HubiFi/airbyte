@@ -271,7 +271,12 @@ class PostgresSqlGenerator(
                 DSL.`val`(AB_META_COLUMN_CHANGES_KEY),
                 DSL.field("ARRAY_CAT({0}, {1})", finalTableChangesArray, rawTableChangesArray),
                 DSL.`val`(JavaBaseConstants.AIRBYTE_META_SYNC_ID_KEY),
-                syncId
+                syncId,
+                DSL.`val`("_hubifi_loaded_at"),
+                DSL.coalesce(
+                    DSL.field(DSL.name(JavaBaseConstants.COLUMN_NAME_AB_LOADED_AT), timestampWithTimeZoneType),
+                    DSL.currentTimestamp()
+                )
             )
             .`as`(JavaBaseConstants.COLUMN_NAME_AB_META)
     }
