@@ -141,6 +141,25 @@ class PostgresSqlGenerator(
             )
         )
 
+        // Add _hubifi_loaded_at column with timestamp with timezone type
+        statements.add(
+            of(
+                dslContext
+                    .alterTable(finalTableName)
+                    .addColumn(DSL.name("_hubifi_loaded_at"), timestampWithTimeZoneType.nullable(true)))
+                    .getSQL()
+            )
+        )
+
+        statements.add(
+            of(
+                dslContext
+                    .createIndex()
+                    .on(finalTableName, DSL.name("_hubifi_loaded_at"))
+                    .getSQL()
+            )
+        )
+
         return concat(statements)
     }
 
