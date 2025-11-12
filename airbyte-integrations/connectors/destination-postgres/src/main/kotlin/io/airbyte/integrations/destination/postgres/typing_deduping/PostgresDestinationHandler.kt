@@ -5,6 +5,10 @@ package io.airbyte.integrations.destination.postgres.typing_deduping
 
 import com.fasterxml.jackson.databind.JsonNode
 import io.airbyte.cdk.db.jdbc.JdbcDatabase
+import io.airbyte.cdk.integrations.base.JavaBaseConstants
+import io.airbyte.cdk.integrations.destination.jdbc.ColumnDefinition
+import io.airbyte.cdk.integrations.destination.jdbc.TableDefinition
+import io.airbyte.integrations.base.destination.typing_deduping.*
 import io.airbyte.cdk.integrations.destination.jdbc.typing_deduping.JdbcDestinationHandler
 import io.airbyte.commons.exceptions.ConfigErrorException
 import io.airbyte.integrations.base.destination.typing_deduping.AirbyteProtocolType
@@ -56,6 +60,44 @@ class PostgresDestinationHandler(
 
     override fun createNamespaces(schemas: Set<String>) {
         TODO("Not yet implemented")
+    }
+
+    override fun existingSchemaMatchesStreamConfig(
+        stream: StreamConfig?,
+        existingTable: TableDefinition
+    ): Boolean {
+        // Check that the columns match, with special handling for the metadata columns.
+        if (
+            !(existingTable.columns.containsKey(JavaBaseConstants.COLUMN_NAME_AB_RAW_ID) &&
+                isAirbyteRawIdColumnMatch(existingTable)) ||
+                !(existingTable.columns.containsKey(
+                    JavaBaseConstants.COLUMN_NAME_AB_EXTRACTED_AT
+                ) && isAirbyteExtractedAtColumnMatch(existingTable)) ||
+                !(existingTable.columns.containsKey(JavaBaseConstants.COLUMN_NAME_AB_META) &&
+                    isAirbyteMetaColumnMatch(existingTable)) ||
+                (columns == DestinationColumns.V2_WITH_GENERATION &&
+                    !(existingTable.columns.containsKey(
+                        JavaBaseConstants.COLUMN_NAME_AB_GENERATION_ID
+                    ) && isAirbyteGenerationColumnMatch(existingTable)))
+        ) {
+            // Missing AB meta columns from final table, we need them to do proper T+D so trigger
+            // soft-reset
+            return false
+        }
+        val intendedColumns =
+            LinkedHashMap(
+                stream!!.columns.entries.associate { it.key.name to toJdbcTypeName(it.value) }
+            )
+
+        // Filter out Meta columns since they don't exist in stream config.
+        val actualColumns = LinkedHashMap<String?, String>()
+        existingTable.columns.entries
+            .filter { column: Map.Entry<String?, ColumnDefinition> ->
+                JavaBaseConstants.V2_FINAL_TABLE_METADATA_COLUMNS.none { it == column.key }
+            }
+            .forEach { actualColumns[it.key] = it.value.type.lowercase() }
+
+        return actualColumns == intendedColumns
     }
 
     private fun toJdbcTypeName(airbyteProtocolType: AirbyteProtocolType): String {
