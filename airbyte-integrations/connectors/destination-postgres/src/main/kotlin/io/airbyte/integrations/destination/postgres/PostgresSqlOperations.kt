@@ -56,7 +56,15 @@ class PostgresSqlOperations(useDropCascade: Boolean) : JdbcSqlOperations() {
                     schemaName +
                     "." +
                     tableName +
-                    "(_airbyte_loaded_at, _airbyte_extracted_at)"
+                    "(_airbyte_loaded_at, _airbyte_extracted_at)",
+                "CREATE INDEX IF NOT EXISTS " +
+                    tableName +
+                    "_hubifi_loaded_at" +
+                    " ON " +
+                    schemaName +
+                    "." +
+                    tableName +
+                    "(_hubifi_loaded_at)"
             )
         } else {
             emptyList()
@@ -144,6 +152,32 @@ class PostgresSqlOperations(useDropCascade: Boolean) : JdbcSqlOperations() {
                 "DROP TABLE $rawNamespace.$rawName $dropTableQualifier",
                 "ALTER TABLE $rawNamespace.$tmpName RENAME TO $rawName"
             )
+        )
+    }
+
+    override fun createTableQueryV2(schemaName: String?, tableName: String?): String {
+        return String.format(
+            """
+        CREATE TABLE IF NOT EXISTS %s.%s (
+          %s VARCHAR PRIMARY KEY,
+          %s JSONB,
+          %s TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          %s TIMESTAMP WITH TIME ZONE DEFAULT NULL,
+          %s JSONB,
+          %s BIGINT,
+          %s TIMESTAMP WITH TIME ZONE DEFAULT NULL,
+        );
+
+        """.trimIndent(),
+            schemaName,
+            tableName,
+            JavaBaseConstants.COLUMN_NAME_AB_RAW_ID,
+            JavaBaseConstants.COLUMN_NAME_DATA,
+            JavaBaseConstants.COLUMN_NAME_AB_EXTRACTED_AT,
+            JavaBaseConstants.COLUMN_NAME_AB_LOADED_AT,
+            JavaBaseConstants.COLUMN_NAME_AB_META,
+            JavaBaseConstants.COLUMN_NAME_AB_GENERATION_ID,
+            "_hubifi_loaded_at",
         )
     }
 }

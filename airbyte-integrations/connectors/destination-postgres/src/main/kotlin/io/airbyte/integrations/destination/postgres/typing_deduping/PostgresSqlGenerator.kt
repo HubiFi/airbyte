@@ -191,7 +191,7 @@ class PostgresSqlGenerator(
             .set(
                 DSL.field(DSL.quotedName("_hubifi_loaded_at")), 
                 DSL.coalesce(
-                    DSL.field(DSL.quotedName("raw", JavaBaseConstants.COLUMN_NAME_AB_LOADED_AT), timestampWithTimeZoneType),
+                    DSL.field(DSL.quotedName("raw", "_hubifi_loaded_at"), timestampWithTimeZoneType),
                     DSL.currentTimestamp()
                 )
             )
@@ -202,9 +202,17 @@ class PostgresSqlGenerator(
             )
             .getSQL(ParamType.INLINED)
             
+        // Add statement to update raw table _hubifi_loaded_at where null
+        val updateRawHubifiLoadedAtStmt = dslContext
+            .update(DSL.table(DSL.quotedName(rawSchema, rawTable)))
+            .set(DSL.field(DSL.quotedName("_hubifi_loaded_at")), DSL.currentTimestamp())
+            .where(DSL.field(DSL.quotedName("_hubifi_loaded_at")).isNull())
+            .getSQL(ParamType.INLINED)
+
         val allStatements = mutableListOf<String>()
         allStatements.addAll(baseTransaction.transactions.flatten())
         allStatements.add(updateHubifiLoadedAtStmt)
+        allStatements.add(updateRawHubifiLoadedAtStmt)
         
         return transactionally(*allStatements.toTypedArray())
     }
