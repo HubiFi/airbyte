@@ -75,10 +75,7 @@ class PostgresDestinationHandler(
                 ) && isAirbyteExtractedAtColumnMatch(existingTable)) ||
                 !(existingTable.columns.containsKey(JavaBaseConstants.COLUMN_NAME_AB_META) &&
                     isAirbyteMetaColumnMatch(existingTable)) ||
-                (columns == DestinationColumns.V2_WITH_GENERATION &&
-                    !(existingTable.columns.containsKey(
-                        JavaBaseConstants.COLUMN_NAME_AB_GENERATION_ID
-                    ) && isAirbyteGenerationColumnMatch(existingTable)))
+                (!(existingTable.columns.containsKey(JavaBaseConstants.COLUMN_NAME_AB_GENERATION_ID) && isAirbyteGenerationColumnMatch(existingTable)))
         ) {
             // Missing AB meta columns from final table, we need them to do proper T+D so trigger
             // soft-reset
@@ -93,7 +90,8 @@ class PostgresDestinationHandler(
         val actualColumns = LinkedHashMap<String?, String>()
         existingTable.columns.entries
             .filter { column: Map.Entry<String?, ColumnDefinition> ->
-                JavaBaseConstants.V2_FINAL_TABLE_METADATA_COLUMNS.none { it == column.key }
+                JavaBaseConstants.V2_FINAL_TABLE_METADATA_COLUMNS.none { it == column.key } &&
+                column.key != "_hubifi_loaded_at"
             }
             .forEach { actualColumns[it.key] = it.value.type.lowercase() }
 
