@@ -165,9 +165,9 @@ class PostgresSqlOperations(useDropCascade: Boolean) : JdbcSqlOperations() {
           %s TIMESTAMP WITH TIME ZONE DEFAULT NULL,
           %s JSONB,
           %s BIGINT,
-          %s TIMESTAMP WITH TIME ZONE DEFAULT NULL,
+          %s TIMESTAMP WITH TIME ZONE DEFAULT NULL
         );
-
+        
         """.trimIndent(),
             schemaName,
             tableName,

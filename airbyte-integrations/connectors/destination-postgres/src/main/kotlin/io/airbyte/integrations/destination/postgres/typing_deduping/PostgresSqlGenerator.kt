@@ -208,7 +208,7 @@ class PostgresSqlGenerator(
             .set(DSL.field(DSL.quotedName("_hubifi_loaded_at")), DSL.currentTimestamp())
             .where(DSL.field(DSL.quotedName("_hubifi_loaded_at")).isNull())
             .getSQL(ParamType.INLINED)
-
+            
         val allStatements = mutableListOf<String>()
         allStatements.addAll(baseTransaction.transactions.flatten())
         allStatements.add(updateHubifiLoadedAtStmt)
