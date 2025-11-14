@@ -11,8 +11,10 @@ import io.airbyte.integrations.base.destination.typing_deduping.Array
 import io.airbyte.integrations.base.destination.typing_deduping.Sql.Companion.concat
 import io.airbyte.integrations.base.destination.typing_deduping.Sql.Companion.of
 import io.airbyte.integrations.base.destination.typing_deduping.StreamId.Companion.concatenateRawTableName
+import io.airbyte.integrations.base.destination.typing_deduping.Sql.Companion.transactionally
 import io.airbyte.protocol.models.AirbyteRecordMessageMetaChange
 import java.util.*
+import java.time.Instant
 import java.util.function.Function
 import java.util.stream.Collectors
 import java.util.stream.Stream
@@ -24,6 +26,7 @@ import org.jooq.SQLDialect
 import org.jooq.impl.DSL
 import org.jooq.impl.DefaultDataType
 import org.jooq.impl.SQLDataType
+import org.jooq.conf.ParamType
 
 class PostgresSqlGenerator(
     namingTransformer: NamingConventionTransformer,
@@ -141,7 +144,77 @@ class PostgresSqlGenerator(
             )
         )
 
+        // Add _hubifi_loaded_at column with timestamp with timezone type
+        statements.add(
+            of(
+                dslContext
+                    .alterTable(finalTableName)
+                    .addColumn(DSL.name("_hubifi_loaded_at"), timestampWithTimeZoneType.nullable(true))
+                    .getSQL()
+            )
+        )
+
+        statements.add(
+            of(
+                dslContext
+                    .createIndex()
+                    .on(finalTableName, DSL.name("_hubifi_loaded_at"))
+                    .getSQL()
+            )
+        )
+
         return concat(statements)
+    }
+
+    override fun updateTable(
+        stream: StreamConfig,
+        finalSuffix: String,
+        minRawTimestamp: Optional<Instant>,
+        useExpensiveSaferCasting: Boolean
+    ): Sql {
+        val baseTransaction = insertAndDeleteTransaction(
+            stream,
+            finalSuffix,
+            minRawTimestamp,
+            useExpensiveSaferCasting,
+        )
+        
+        val finalSchema = stream.id.finalNamespace
+        val finalTable = stream.id.finalName + (finalSuffix?.lowercase(Locale.getDefault()) ?: "")
+        
+        // Add additional statement for _hubifi_loaded_at
+        val rawSchema = stream.id.rawNamespace
+        val rawTable = stream.id.rawName
+        
+        val updateHubifiLoadedAtStmt = dslContext
+            .update(DSL.table(DSL.quotedName(finalSchema, finalTable)).`as`("final"))
+            .set(
+                DSL.field(DSL.quotedName("_hubifi_loaded_at")), 
+                DSL.coalesce(
+                    DSL.field(DSL.quotedName("raw", "_hubifi_loaded_at"), timestampWithTimeZoneType),
+                    DSL.currentTimestamp()
+                )
+            )
+            .from(DSL.table(DSL.quotedName(rawSchema, rawTable)).`as`("raw"))
+            .where(
+                DSL.field(DSL.quotedName("final", JavaBaseConstants.COLUMN_NAME_AB_RAW_ID))
+                    .eq(DSL.field(DSL.quotedName("raw", JavaBaseConstants.COLUMN_NAME_AB_RAW_ID)))
+            )
+            .getSQL(ParamType.INLINED)
+            
+        // Add statement to update raw table _hubifi_loaded_at where null
+        val updateRawHubifiLoadedAtStmt = dslContext
+            .update(DSL.table(DSL.quotedName(rawSchema, rawTable)))
+            .set(DSL.field(DSL.quotedName("_hubifi_loaded_at")), DSL.currentTimestamp())
+            .where(DSL.field(DSL.quotedName("_hubifi_loaded_at")).isNull())
+            .getSQL(ParamType.INLINED)
+            
+        val allStatements = mutableListOf<String>()
+        allStatements.addAll(baseTransaction.transactions.flatten())
+        allStatements.add(updateHubifiLoadedAtStmt)
+        allStatements.add(updateRawHubifiLoadedAtStmt)
+        
+        return transactionally(*allStatements.toTypedArray())
     }
 
     override fun extractRawDataFields(
