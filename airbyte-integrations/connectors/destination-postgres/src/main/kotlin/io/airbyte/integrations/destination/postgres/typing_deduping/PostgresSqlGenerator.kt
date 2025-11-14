@@ -190,7 +190,7 @@ class PostgresSqlGenerator(
         if (minRawTimestamp.isPresent) {
             extractedAtCondition =
                 extractedAtCondition.and(
-                    DSL.field(DSL.name(JavaBaseConstants.COLUMN_NAME_AB_EXTRACTED_AT))
+                    DSL.field(DSL.quotedName("raw", JavaBaseConstants.COLUMN_NAME_AB_EXTRACTED_AT))
                         .gt(formatTimestampLiteral(minRawTimestamp.get())),
                 )
         }
@@ -214,7 +214,7 @@ class PostgresSqlGenerator(
             
         // Add statement to update raw table _hubifi_loaded_at where null
         val updateRawHubifiLoadedAtStmt = dslContext
-            .update(DSL.table(DSL.quotedName(rawSchema, rawTable)))
+            .update(DSL.table(DSL.quotedName(rawSchema, rawTable)).`as`("raw"))
             .set(DSL.field(DSL.quotedName("_hubifi_loaded_at")), DSL.currentTimestamp())
             .where(DSL.field(DSL.quotedName("_hubifi_loaded_at")).isNull())
             .and(extractedAtCondition)
