@@ -185,6 +185,15 @@ class PostgresSqlGenerator(
         // Add additional statement for _hubifi_loaded_at
         val rawSchema = stream.id.rawNamespace
         val rawTable = stream.id.rawName
+
+        var extractedAtCondition = DSL.noCondition()
+        if (minRawTimestamp.isPresent) {
+            extractedAtCondition =
+                extractedAtCondition.and(
+                    DSL.field(DSL.name(JavaBaseConstants.COLUMN_NAME_AB_EXTRACTED_AT))
+                        .gt(formatTimestampLiteral(minRawTimestamp.get())),
+                )
+        }
         
         val updateHubifiLoadedAtStmt = dslContext
             .update(DSL.table(DSL.quotedName(finalSchema, finalTable)).`as`("final"))
@@ -200,6 +209,7 @@ class PostgresSqlGenerator(
                 DSL.field(DSL.quotedName("final", JavaBaseConstants.COLUMN_NAME_AB_RAW_ID))
                     .eq(DSL.field(DSL.quotedName("raw", JavaBaseConstants.COLUMN_NAME_AB_RAW_ID)))
             )
+            .and(extractedAtCondition)
             .getSQL(ParamType.INLINED)
             
         // Add statement to update raw table _hubifi_loaded_at where null
@@ -207,6 +217,7 @@ class PostgresSqlGenerator(
             .update(DSL.table(DSL.quotedName(rawSchema, rawTable)))
             .set(DSL.field(DSL.quotedName("_hubifi_loaded_at")), DSL.currentTimestamp())
             .where(DSL.field(DSL.quotedName("_hubifi_loaded_at")).isNull())
+            .and(extractedAtCondition)
             .getSQL(ParamType.INLINED)
             
         val allStatements = mutableListOf<String>()
