@@ -64,7 +64,15 @@ class PostgresSqlOperations(useDropCascade: Boolean) : JdbcSqlOperations() {
                     schemaName +
                     "." +
                     tableName +
-                    "(_hubifi_loaded_at)"
+                    "(_hubifi_loaded_at)",
+                    "CREATE INDEX IF NOT EXISTS " +
+                    tableName +
+                    "_hle" +
+                    " ON " +
+                    schemaName +
+                    "." +
+                    tableName +
+                    "(_hubifi_loaded_at, _airbyte_extracted_at)"
             )
         } else {
             emptyList()
